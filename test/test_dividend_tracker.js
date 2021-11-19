@@ -19,21 +19,21 @@ async function setUp() {
   const iterableMapping = await IterableMapping.deploy();
   await iterableMapping.deployed();
 
-  const KATADividendTracker = await ethers.getContractFactory(
-    "KATADividendTracker",
+  const ARCDividendTracker = await ethers.getContractFactory(
+    "ARCDividendTracker",
     {
       libraries: {
         IterableMapping: iterableMapping.address,
       },
     }
   );
-  divTracker = await KATADividendTracker.deploy();
+  divTracker = await ARCDividendTracker.deploy();
   await divTracker.deployed();
 
   [owner, rewardAcct1, rewardAcct2, noRewardAcct] = await ethers.getSigners();
 }
 
-describe("KATADividendTracker", function () {
+describe("ARCDividendTracker", function () {
   before(setUp);
 
   describe("Temporary state changes", function () {

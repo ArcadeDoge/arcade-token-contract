@@ -7,7 +7,7 @@ import "./SafeMath.sol";
 import "./IterableMapping.sol";
 import "./Ownable.sol";
 
-contract KATADividendTracker is DividendPayingToken, Ownable {
+contract ARCDividendTracker is DividendPayingToken, Ownable {
     using SafeMath for uint256;
     using SafeMathUint for uint256;
     using SafeMathInt for int256;
@@ -29,16 +29,16 @@ contract KATADividendTracker is DividendPayingToken, Ownable {
 
     event Claim(address indexed account, uint256 amount, bool indexed automatic);
 
-    constructor() DividendPayingToken("KATA_Dividend_Tracker", "KATA_Dividend_Tracker") {
+    constructor() DividendPayingToken("ARC_Dividend_Tracker", "ARC_Dividend_Tracker") {
         claimWait = 3600;
     }
 
     function _transfer(address, address, uint256) internal pure override {
-        require(false, "KATA_Dividend_Tracker: No transfers allowed");
+        require(false, "ARC_Dividend_Tracker: No transfers allowed");
     }
 
     function withdrawDividend() external pure override {
-        require(false, "KATA_Dividend_Tracker: withdrawDividend disabled. Use the 'claim' function on the main KATA contract.");
+        require(false, "ARC_Dividend_Tracker: withdrawDividend disabled. Use the 'claim' function on the main ARC contract.");
     }
 
     function excludeFromDividends(address account) external onlyOwner {
@@ -52,14 +52,14 @@ contract KATADividendTracker is DividendPayingToken, Ownable {
     }
 
     function updateGasForTransfer(uint256 newGasForTransfer) external onlyOwner {
-        require(newGasForTransfer != gasForTransfer, "KATA_Dividend_Tracker: Cannot update gasForTransfer to same value");
+        require(newGasForTransfer != gasForTransfer, "ARC_Dividend_Tracker: Cannot update gasForTransfer to same value");
         emit GasForTransferUpdated(newGasForTransfer, gasForTransfer);
         gasForTransfer = newGasForTransfer;
     }
 
     function updateClaimWait(uint256 newClaimWait) external onlyOwner {
-        require(newClaimWait >= 3600 && newClaimWait <= 86400, "KATA_Dividend_Tracker: claimWait must be updated to between 1 and 24 hours");
-        require(newClaimWait != claimWait, "KATA_Dividend_Tracker: Cannot update claimWait to same value");
+        require(newClaimWait >= 3600 && newClaimWait <= 86400, "ARC_Dividend_Tracker: claimWait must be updated to between 1 and 24 hours");
+        require(newClaimWait != claimWait, "ARC_Dividend_Tracker: Cannot update claimWait to same value");
         emit ClaimWaitUpdated(newClaimWait, claimWait);
         claimWait = newClaimWait;
     }

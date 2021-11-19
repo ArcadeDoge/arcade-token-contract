@@ -16,7 +16,7 @@ interface DividendPayingTokenInterface {
     /// @dev SHOULD distribute the paid ether to token holders as dividends.
     ///  SHOULD NOT directly transfer ether to token holders in this function.
     ///  MUST emit a `DividendsDistributed` event when the amount of distributed ether is greater than 0.
-    function distributeDividends() external payable;
+    function distributeBUSDDividends(uint256 amount) external;
 
     /// @notice Withdraws the ether distributed to the sender.
     /// @dev SHOULD transfer `dividendOf(msg.sender)` wei to `msg.sender`, and `dividendOf(msg.sender)` SHOULD be 0 after the transfer.

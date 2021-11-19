@@ -1,16 +1,15 @@
-# katacoin-contract
-Solidity contract for KATA Coin.
+# arcade-token-contract
+Solidity contract for ARC Coin.
 
 1. Clone repo
 
 ```shell
-https://github.com/katanainu/katacoin-contract
+https://github.com/ArcadeDoge/token-contract
 ```
 
 2. Install yarn packages
 
 ```shell
-cd katacoin-contract
 yarn install
 ```
 

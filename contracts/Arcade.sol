@@ -2,46 +2,67 @@
 
 pragma solidity 0.8.4;
 
-import "./KATADividendTracker.sol";
-import "./FTPAntiBot.sol";
+import "./ARCDividendTracker.sol";
 import "./SafeMath.sol";
 import "./Ownable.sol";
 import "./IUniswapV2Pair.sol";
 import "./IUniswapV2Factory.sol";
 import "./IUniswapV2Router.sol";
 
-contract KATA is ERC20, Ownable {
+contract Arcade is ERC20, Ownable {
     using SafeMath for uint256;
-
-    FTPAntiBot private antiBot;
-    bool public useAntiBot = true;
 
     IUniswapV2Router02 public uniswapV2Router;
     address public immutable uniswapV2Pair;
 
-    bool private liquidating;
+    bool private swapping;
 
-    KATADividendTracker public dividendTracker;
+    ARCDividendTracker public dividendTracker;
 
     address public liquidityWallet;
 
     uint256 public constant MAX_SELL_TRANSACTION_AMOUNT = 1000000 * (10**18);
 
-    uint256 public constant ETH_REWARDS_FEE = 4;
-    uint256 public constant LIQUIDITY_FEE = 2;
-    uint256 public constant TOTAL_FEES = ETH_REWARDS_FEE + LIQUIDITY_FEE;
+    // Percentages for buyback, marketing, reflection, charity and dev
+    uint256 public _burnFee = 100; // 1%
+    uint256 public _farmingFee = 0; // 0%
+    
+    uint256 public _reflectionFee = 0; // 0%
+    uint256 public _buyBackFee = 500; // 5%, burn per
+    uint256 public _charityFee = 0; // 0%
+    uint256 public _devFee = 200; // 2%
+    uint256 public _marketingFee = 200; // 2%
 
-    // burn percentage per transaction
-    uint256 public constant BUYBACK_FEE = 2;
+    uint256 public _totalFees = _buyBackFee + _reflectionFee + _charityFee + _devFee + _marketingFee;
+
+    /**
+     * BUSD on Mainnet: 0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56
+     */
+    address public immutable BUSD;
+    address public immutable DEAD = 0x000000000000000000000000000000000000dEaD;
+
+    address public buyBackAddress;
+    address public marketingAddress;
+    address public charityAddress;
+    address public devAddress;
+    address public farmingAddress;
+
+    mapping (address => uint256[]) private _transactTime; // last transaction time(block.timestamp)
+    mapping (address => bool) private _isExcludedFromAntiBot;
+    mapping(address => bool) public _isBlackListed;
+    bool public _antiBotEnabled = true; // true; // test code
+    uint256 public _botLimitTimestamp;  // timestamp when set variable
+    uint256 public _botTransLimitTime = 600; // transaction limit time in second
+    uint256 public _botTransLimitCount = 4; // transaction limit count within _botExpiration(second)
 
     // use by default 150,000 gas to process auto-claiming dividends
     uint256 public gasForProcessing = 150000;
 
     // liquidate tokens for ETH when the contract reaches 100k tokens by default
-    uint256 public liquidateTokensAtAmount = 100000 * (10**18);
+    uint256 public liquidateTokensAtAmount = 1; // 100000 * (10**18); // test code
 
     // whether the token can already be traded
-    bool public tradingEnabled;
+    bool public tradingEnabled = true; // remove true condition
 
     // exclude from fees and max transaction amount
     mapping (address => bool) private _isExcludedFromFees;
@@ -53,9 +74,9 @@ contract KATA is ERC20, Ownable {
     // could be subject to a maximum transfer amount
     mapping (address => bool) public automatedMarketMakerPairs;
 
-    event UpdatedAntiBot(address indexed newAddress, address indexed oldAddress);
+    event AntiBotEnabledUpdated(bool enabled);
 
-    event ToggledAntiBot(bool newValue, bool oldValue);
+    event OnBlackList(address account);
 
     event UpdatedDividendTracker(address indexed newAddress, address indexed oldAddress);
 
@@ -89,21 +110,34 @@ contract KATA is ERC20, Ownable {
         address indexed processor
     );
 
-    constructor() ERC20("KATA", "KATA") {
-        assert(TOTAL_FEES == 6);
+    event MyEvent(uint256 id, uint256 value1, uint256 value2, uint256 value3);
 
-        dividendTracker = new KATADividendTracker();
+    modifier antiBots(address from, address to) {
+        require(
+            !_isBlackListed[from] && !_isBlackListed[to],
+            "BlackListed account"
+        );
+        _;
+    }
+
+    constructor(address _router, address _busd) ERC20("ARCADE", "ARC") {
+        dividendTracker = new ARCDividendTracker();
         liquidityWallet = owner();
 
-        IUniswapV2Router02 _uniswapV2Router = IUniswapV2Router02(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D);
+        BUSD = _busd;
+
+        IUniswapV2Router02 _uniswapV2Router = IUniswapV2Router02(_router);
         // Create a uniswap pair for this new token
         address _uniswapV2Pair = IUniswapV2Factory(_uniswapV2Router.factory()).createPair(address(this), _uniswapV2Router.WETH());
 
-        FTPAntiBot _antiBot = FTPAntiBot(0xCD5312d086f078D1554e8813C27Cf6C9D1C3D9b3);
-        antiBot = _antiBot;
-
         uniswapV2Router = _uniswapV2Router;
         uniswapV2Pair = _uniswapV2Pair;
+
+        buyBackAddress = 0x14719e7e6bEEDFf6f768307A223FEFBe6669b923;
+        marketingAddress = 0x99Cc9963CcBED099900988bc9E2aacc66A7B724f;
+        charityAddress = 0x5eb7C4114525b597833022E21F9d6865a1476a59;
+        devAddress = 0x79b0b5aDEF94d3768D40e19d9D53406A8933c025;
+        farmingAddress = 0xEcC15277b86964db2454cc44CeB1cC90957402E6;
 
         _setAutomatedMarketMakerPair(_uniswapV2Pair, true);
 
@@ -116,6 +150,11 @@ contract KATA is ERC20, Ownable {
         // exclude from paying fees or having max transaction amount
         excludeFromFees(liquidityWallet);
         excludeFromFees(address(this));
+        excludeFromFees(buyBackAddress);
+        excludeFromFees(marketingAddress);
+        excludeFromFees(charityAddress);
+        excludeFromFees(devAddress);
+        excludeFromFees(farmingAddress);
 
         // enable owner wallet to send tokens before presales are over.
         canTransferBeforeTradingIsEnabled[owner()] = true;
@@ -124,7 +163,7 @@ contract KATA is ERC20, Ownable {
             _mint is an internal function in ERC20.sol that is only called here,
             and CANNOT be called ever again
         */
-        _mint(owner(), 50 * (10**9) * (10**18));   // 50B supply; 1B = 1e9
+        _mint(owner(), 1 * (10**9) * (10**18));
     }
 
     receive() external payable {
@@ -132,17 +171,17 @@ contract KATA is ERC20, Ownable {
     }
 
     function activate() external onlyOwner {
-        require(!tradingEnabled, "KATA: Trading is already enabled");
+        require(!tradingEnabled, "Arcade: Trading is already enabled");
         tradingEnabled = true;
     }
 
     function updateDividendTracker(address newAddress) external onlyOwner {
-        require(newAddress != address(dividendTracker), "KATA: The dividend tracker already has that address");
-        require(newAddress != address(0), "KATA: newAddress is a zero address");
+        require(newAddress != address(dividendTracker), "Arcade: The dividend tracker already has that address");
+        require(newAddress != address(0), "Arcade: newAddress is a zero address");
 
-        KATADividendTracker newDividendTracker = KATADividendTracker(payable(newAddress));
+        ARCDividendTracker newDividendTracker = ARCDividendTracker(payable(newAddress));
 
-        require(newDividendTracker.owner() == address(this), "KATA: The new dividend tracker must be owned by the KATA token contract");
+        require(newDividendTracker.owner() == address(this), "Arcade: The new dividend tracker must be owned by the ARC token contract");
 
         newDividendTracker.excludeFromDividends(address(newDividendTracker));
         newDividendTracker.excludeFromDividends(address(this));
@@ -155,27 +194,27 @@ contract KATA is ERC20, Ownable {
     }
 
     function updateUniswapV2Router(address newAddress) external onlyOwner {
-        require(newAddress != address(uniswapV2Router), "KATA: The router already has that address");
-        require(newAddress != address(0), "KATA: newAddress is a zero address");
+        require(newAddress != address(uniswapV2Router), "Arcade: The router already has that address");
+        require(newAddress != address(0), "Arcade: newAddress is a zero address");
 
         emit UpdatedUniswapV2Router(newAddress, address(uniswapV2Router));
         uniswapV2Router = IUniswapV2Router02(newAddress);
     }
 
     function excludeFromFees(address account) public onlyOwner {
-        require(!_isExcludedFromFees[account], "KATA: Account is already excluded from fees");
+        require(!_isExcludedFromFees[account], "Arcade: Account is already excluded from fees");
         _isExcludedFromFees[account] = true;
     }
 
     function setAutomatedMarketMakerPair(address pair, bool value) external onlyOwner {
-        require(pair != uniswapV2Pair, "KATA: The Uniswap pair cannot be removed from automatedMarketMakerPairs");
-        require(pair != address(0), "KATA: pair is a zero address");
+        require(pair != uniswapV2Pair, "Arcade: The Uniswap pair cannot be removed from automatedMarketMakerPairs");
+        require(pair != address(0), "Arcade: pair is a zero address");
 
         _setAutomatedMarketMakerPair(pair, value);
     }
 
     function _setAutomatedMarketMakerPair(address pair, bool value) private {
-        require(automatedMarketMakerPairs[pair] != value, "KATA: Automated market maker pair is already set to that value");
+        require(automatedMarketMakerPairs[pair] != value, "Arcade: Automated market maker pair is already set to that value");
         automatedMarketMakerPairs[pair] = value;
 
         if (value) {
@@ -186,30 +225,79 @@ contract KATA is ERC20, Ownable {
     }
 
     function allowTransferBeforeTradingIsEnabled(address account) external onlyOwner {
-        require(!canTransferBeforeTradingIsEnabled[account], "KATA: Account is already allowed to transfer before trading is enabled");
+        require(!canTransferBeforeTradingIsEnabled[account], "Arcade: Account is already allowed to transfer before trading is enabled");
         canTransferBeforeTradingIsEnabled[account] = true;
     }
 
     function updateLiquidityWallet(address newLiquidityWallet) external onlyOwner {
-        require(newLiquidityWallet != liquidityWallet, "KATA: The liquidity wallet is already this address");
-        require(newLiquidityWallet != address(0), "KATA: newLiquidityWallet is a zero address");
+        require(newLiquidityWallet != liquidityWallet, "Arcade: The liquidity wallet is already this address");
+        require(newLiquidityWallet != address(0), "Arcade: newLiquidityWallet is a zero address");
         excludeFromFees(newLiquidityWallet);
         emit LiquidityWalletUpdated(newLiquidityWallet, liquidityWallet);
         liquidityWallet = newLiquidityWallet;
     }
 
+    function setFeeReceivers(
+        address _marketingFeeReceiver,
+        address _charityFeeReceiver,
+        address _devFeeReceiver,
+        address _buybackReceiver,
+        address _farmingReceiver
+    )
+        external onlyOwner 
+    {
+        marketingAddress = _marketingFeeReceiver;
+        charityAddress = _charityFeeReceiver;
+        devAddress = _devFeeReceiver;
+        buyBackAddress = _buybackReceiver;
+        farmingAddress = _farmingReceiver;
+    }
+
+    function setFees(
+        uint256 reflectionFee,
+        uint256 buybackFee,
+        uint256 charityFee,
+        uint256 marketingFee,
+        uint256 devFee,
+        uint256 burnFee,
+        uint256 farmingFee
+    )
+        external onlyOwner
+    {
+        _reflectionFee = reflectionFee;
+        _buyBackFee = buybackFee;
+        _charityFee = charityFee;
+        _marketingFee = marketingFee;
+        _devFee = devFee;
+        _burnFee = burnFee;
+        _farmingFee = farmingFee;
+        _totalFees = reflectionFee + buybackFee + charityFee + marketingFee + devFee;
+    }
+
+    function setAntiBotEnabled(bool enabled) external onlyOwner() {
+        _antiBotEnabled = enabled;
+        _botLimitTimestamp = block.timestamp;
+        emit AntiBotEnabledUpdated(enabled);
+    }
+
+    function setBotTransLimit(uint256 transTime, uint256 transCount) external onlyOwner() {
+        _botTransLimitTime = transTime;
+        _botTransLimitCount = transCount;
+        _botLimitTimestamp = block.timestamp;
+    }
+
     function updateGasForProcessing(uint256 newValue) external onlyOwner {
         // Need to make gas fee customizable to future-proof against Ethereum network upgrades.
-        require(newValue != gasForProcessing, "KATA: Cannot update gasForProcessing to same value");
+        require(newValue != gasForProcessing, "Arcade: Cannot update gasForProcessing to same value");
         emit GasForProcessingUpdated(newValue, gasForProcessing);
         gasForProcessing = newValue;
     }
 
     function updateLiquidationThreshold(uint256 newValue) external onlyOwner {
-        require(newValue <= 200000 * (10 ** 18), "KATA: liquidateTokensAtAmount must be less than 200,000");
-        require(newValue != liquidateTokensAtAmount, "KATA: Cannot update gasForProcessing to same value");
+        require(newValue <= 200000 * (10 ** 18), "Arcade: liquidateTokensAtAmount must be less than 200,000");
+        require(newValue != liquidateTokensAtAmount, "Arcade: Cannot update gasForProcessing to same value");
         emit LiquidationThresholdUpdated(newValue, liquidateTokensAtAmount);
-        liquidateTokensAtAmount = newValue;
+        liquidateTokensAtAmount = newValue * (10 ** 18);
     }
 
     function updateGasForTransfer(uint256 gasForTransfer) external onlyOwner {
@@ -287,19 +375,6 @@ contract KATA is ERC20, Ownable {
         return dividendTracker.getNumberOfTokenHolders();
     }
 
-    function updateAntiBot(address newAddress) external onlyOwner {
-        require(newAddress != address(0), "KATA: newAddress is a zero address");
-        FTPAntiBot _antiBot = FTPAntiBot(newAddress);
-        emit UpdatedAntiBot(newAddress, address(antiBot));
-        antiBot = _antiBot;
-    }
-
-    function toggleAntiBot() external onlyOwner {
-        bool newValue = !useAntiBot;
-        emit ToggledAntiBot(newValue, useAntiBot);
-        useAntiBot = newValue;
-    }
-
     function _transfer(
         address from,
         address to,
@@ -312,14 +387,7 @@ contract KATA is ERC20, Ownable {
 
         // only whitelisted addresses can make transfers before the public presale is over.
         if (!tradingIsEnabled) {
-            require(canTransferBeforeTradingIsEnabled[from], "KATA: This account cannot send tokens until trading is enabled");
-        }
-
-        if (useAntiBot) {
-            if ((from == uniswapV2Pair || to == uniswapV2Pair) && tradingIsEnabled) {
-                require(!antiBot.scanAddress(from, uniswapV2Pair, tx.origin),  "Beep Beep Boop, You're a piece of poop");
-                require(!antiBot.scanAddress(to, uniswapV2Pair, tx.origin), "Beep Beep Boop, You're a piece of poop");
-            }
+            require(canTransferBeforeTradingIsEnabled[from], "Arcade: This account cannot send tokens until trading is enabled");
         }
 
         if (amount == 0) {
@@ -327,7 +395,7 @@ contract KATA is ERC20, Ownable {
             return;
         }
 
-        if (!liquidating &&
+        if (!swapping &&
             tradingIsEnabled &&
             automatedMarketMakerPairs[to] && // sells only by detecting transfer to automated market maker pair
             from != address(uniswapV2Router) && //router -> pair is removing liquidity which shouldn't have max
@@ -342,52 +410,48 @@ contract KATA is ERC20, Ownable {
 
         if (tradingIsEnabled &&
             canSwap &&
-            !liquidating &&
+            !swapping &&
             !automatedMarketMakerPairs[from] &&
             from != liquidityWallet &&
             to != liquidityWallet
         ) {
-            liquidating = true;
-
-            uint256 swapTokens = contractTokenBalance.mul(LIQUIDITY_FEE).div(TOTAL_FEES);
-            swapAndLiquify(swapTokens);
+            swapping = true;
 
             uint256 sellTokens = balanceOf(address(this));
-            swapAndSendDividends(sellTokens);
+            swapTokensForBusd(sellTokens);
+            uint256 dividends = IERC20(BUSD).balanceOf(address(this));
+            swapAndSendDividends(dividends);
 
-            liquidating = false;
+            swapping = false;
         }
 
-        bool takeFee = tradingIsEnabled && !liquidating;
+        bool takeFee = tradingIsEnabled && !swapping;
 
         // if any account belongs to _isExcludedFromFee account then remove the fee
         if (_isExcludedFromFees[from] || _isExcludedFromFees[to]) {
             takeFee = false;
         }
         
-        uint256 buyback_fee = amount.mul(BUYBACK_FEE).div(100);
+        uint256 burnTokens = amount.mul(_burnFee).div(10000);
 
         if (takeFee) {
-            uint256 fees = amount.mul(TOTAL_FEES).div(100);
-            amount = amount.sub(fees);
-
+            uint256 fees = amount.mul(_totalFees).div(10000);
             super._transfer(from, address(this), fees);
+
+            uint256 farmingFees = amount.mul(_farmingFee).div(10000);
+            super._transfer(from, farmingAddress, farmingFees);
+            amount = amount.sub(fees).sub(farmingFees);
         }
 
-        if (from != uniswapV2Pair && to != uniswapV2Pair) {
-            super._burn(from, buyback_fee);
+        if (from != uniswapV2Pair && to != uniswapV2Pair && burnTokens > 0) {
+            super._burn(from, burnTokens);
         }
-        super._transfer(from, to, amount.sub(buyback_fee));
+        super._transfer(from, to, amount.sub(burnTokens));
 
         try dividendTracker.setBalance(payable(from), balanceOf(from)) {} catch {}
         try dividendTracker.setBalance(payable(to), balanceOf(to)) {} catch {}
 
-        if (useAntiBot) {
-            // Tells AntiBot to start watching.
-            antiBot.registerBlock(from, to, tx.origin);
-        }
-
-        if (!liquidating) {
+        if (!swapping) {
             uint256 gas = gasForProcessing;
 
             try dividendTracker.process(gas) returns (uint256 iterations, uint256 claims, uint256 lastProcessedIndex) {
@@ -396,8 +460,25 @@ contract KATA is ERC20, Ownable {
 
             }
         }
-    }
 
+        if (_antiBotEnabled && !_isExcludedFromAntiBot[from]) {
+            if (_transactTime[from].length < _botTransLimitCount) {
+                _transactTime[from].push(block.timestamp);
+                return;
+            }
+            // push array left
+            for (uint256 i = 1; i < _botTransLimitCount; i++) {
+                _transactTime[from][i - 1] = _transactTime[from][i];
+            }
+            _transactTime[from][_botTransLimitCount - 1] = block.timestamp;
+            if (_transactTime[from][0] > _botLimitTimestamp &&
+                _transactTime[from][_botTransLimitCount - 1] - _transactTime[from][0] < _botTransLimitTime) {
+                _isBlackListed[from] = true;
+                emit OnBlackList(from);
+            }
+        }
+    }
+    
     function swapAndLiquify(uint256 tokens) private {
         // split the contract balance into halves
         uint256 half = tokens.div(2);
@@ -421,6 +502,21 @@ contract KATA is ERC20, Ownable {
         emit Liquified(half, newBalance, otherHalf);
     }
 
+    function addLiquidity(uint256 tokenAmount, uint256 ethAmount) private {
+        // approve token transfer to cover all possible scenarios
+        _approve(address(this), address(uniswapV2Router), tokenAmount);
+
+        // add the liquidity
+        uniswapV2Router.addLiquidityETH{value: ethAmount}(
+            address(this),
+            tokenAmount,
+            0, // slippage is unavoidable
+            0, // slippage is unavoidable
+            liquidityWallet,
+            block.timestamp
+        );
+    }
+
     function swapTokensForEth(uint256 tokenAmount) private {
         // generate the uniswap pair path of token -> weth
         address[] memory path = new address[](2);
@@ -439,28 +535,57 @@ contract KATA is ERC20, Ownable {
         );
     }
 
-    function addLiquidity(uint256 tokenAmount, uint256 ethAmount) private {
-        // approve token transfer to cover all possible scenarios
+    function swapTokensForBusd(uint256 tokenAmount) private {
+        address[] memory path = new address[](3);
+        path[0] = address(this);
+        path[1] = uniswapV2Router.WETH();
+        path[2] = BUSD;
+
         _approve(address(this), address(uniswapV2Router), tokenAmount);
 
-        // add the liquidity
-        uniswapV2Router.addLiquidityETH{value: ethAmount}(
-            address(this),
+        // make the swap
+        uniswapV2Router.swapExactTokensForTokensSupportingFeeOnTransferTokens(
             tokenAmount,
-            0, // slippage is unavoidable
-            0, // slippage is unavoidable
-            liquidityWallet,
+            0,
+            path,
+            address(this),
             block.timestamp
         );
     }
 
-    function swapAndSendDividends(uint256 tokens) private {
-        swapTokensForEth(tokens);
-        uint256 dividends = address(this).balance;
+    function swapAndSendToFee(uint256 newBalance) private  {
+        uint256 buyBackCharityDevMarketingFee = _buyBackFee.add(_charityFee).add(_devFee).add(_marketingFee);
 
-        (bool success,) = address(dividendTracker).call{value: dividends}("");
-        if (success) {
-            emit SentDividends(tokens, dividends);
+        uint256 newBalanceBuyBack = newBalance.mul(_buyBackFee).div(buyBackCharityDevMarketingFee);
+        uint256 newBalanceDev = newBalance.mul(_devFee).div(buyBackCharityDevMarketingFee);
+        uint256 newBalanceMarketing = newBalance.mul(_marketingFee).div(buyBackCharityDevMarketingFee);
+        uint256 newBalanceCharity = newBalance.sub(newBalanceBuyBack).sub(newBalanceDev).sub(newBalanceMarketing);
+
+        if (newBalanceBuyBack > 0) {
+            IERC20(BUSD).transfer(buyBackAddress, newBalanceBuyBack);
+        }
+        if (newBalanceDev > 0) {
+            IERC20(BUSD).transfer(devAddress, newBalanceDev);
+        }
+        if (newBalanceMarketing > 0) {
+            IERC20(BUSD).transfer(marketingAddress, newBalanceMarketing);
+        }
+        if (newBalanceCharity > 0) {
+            IERC20(BUSD).transfer(charityAddress, newBalanceCharity);
+        }
+    }
+
+    function swapAndSendDividends(uint256 dividends) private {
+        uint256 feeTokens = dividends.mul(_totalFees.sub(_reflectionFee)).div(_totalFees);
+        swapAndSendToFee(feeTokens);
+
+        dividends = dividends.sub(feeTokens);
+        bool success = IERC20(BUSD).transfer(address(dividendTracker), dividends);
+
+        if (success && dividends > 0) {
+            try dividendTracker.distributeBUSDDividends(dividends) {
+                emit SentDividends(feeTokens, dividends);
+            } catch {}
         }
     }
 

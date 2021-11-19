@@ -19,6 +19,8 @@ contract DividendPayingToken is ERC20, DividendPayingTokenInterface, DividendPay
     using SafeMath for uint256;
     using SafeMathUint for uint256;
     using SafeMathInt for int256;
+    
+    address public immutable BUSD = address(0x78867BbEeF44f2326bF8DDd1941a4439382EF2A7); //BUSD
 
     // With `magnitude`, we can properly distribute dividends even if the amount of received ether is small.
     // For more discussion about choosing the value of `magnitude`,
@@ -50,11 +52,6 @@ contract DividendPayingToken is ERC20, DividendPayingTokenInterface, DividendPay
         gasForTransfer = 3000;
     }
 
-    /// @dev Distributes dividends whenever ether is paid to this contract.
-    receive() external payable {
-        distributeDividends();
-    }
-
     /// @notice Distributes ether to token holders as dividends.
     /// @dev It reverts if the total supply of tokens is 0.
     /// It emits the `DividendsDistributed` event if the amount of received ether is greater than 0.
@@ -68,33 +65,33 @@ contract DividendPayingToken is ERC20, DividendPayingTokenInterface, DividendPay
     ///     and try to distribute it in the next distribution,
     ///     but keeping track of such data on-chain costs much more than
     ///     the saved ether, so we don't do that.
-    function distributeDividends() public override payable {
+    function distributeBUSDDividends(uint256 amount) external override {
         require(totalSupply() > 0, "Total Supply should be greater than zero");
 
-        if (msg.value > 0) {
+        if (amount > 0) {
             magnifiedDividendPerShare = magnifiedDividendPerShare.add(
-                (msg.value).mul(magnitude) / totalSupply()
+                (amount).mul(magnitude) / totalSupply()
             );
-            emit DividendsDistributed(msg.sender, msg.value);
+            emit DividendsDistributed(msg.sender, amount);
 
-            totalDividendsDistributed = totalDividendsDistributed.add(msg.value);
+            totalDividendsDistributed = totalDividendsDistributed.add(amount);
         }
     }
 
     /// @notice Withdraws the ether distributed to the sender.
     /// @dev It emits a `DividendWithdrawn` event if the amount of withdrawn ether is greater than 0.
     function withdrawDividend() external virtual override {
-        _withdrawDividendOfUser(payable(msg.sender));
+        _withdrawDividendOfUser(msg.sender);
     }
 
     /// @notice Withdraws the ether distributed to the sender.
     /// @dev It emits a `DividendWithdrawn` event if the amount of withdrawn ether is greater than 0.
-    function _withdrawDividendOfUser(address payable user) internal returns (uint256) {
+    function _withdrawDividendOfUser(address user) internal returns (uint256) {
         uint256 _withdrawableDividend = withdrawableDividendOf(user);
         if (_withdrawableDividend > 0) {
             withdrawnDividends[user] = withdrawnDividends[user].add(_withdrawableDividend);
             emit DividendWithdrawn(user, _withdrawableDividend);
-            (bool success,) = user.call{value: _withdrawableDividend, gas: gasForTransfer}("");
+            bool success = IERC20(BUSD).transfer(user, _withdrawableDividend);
 
             if(!success) {
                 withdrawnDividends[user] = withdrawnDividends[user].sub(_withdrawableDividend);
