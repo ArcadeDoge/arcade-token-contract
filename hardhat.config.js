@@ -19,8 +19,8 @@ module.exports = {
       url: process.env.MORALIS_BSC_TESTNET_ARCHIVE_URL || "",
       chainId: 97,
       accounts:
-        process.env.MNEMONIC !== undefined
-          ? { mnemonic: process.env.MNEMONIC }
+        process.env.DEPLOYER001_PRIVATE_KEY !== undefined
+          ? { mnemonic: process.env.DEPLOYER001_PRIVATE_KEY }
           : [],
     },
     mainnet: {
