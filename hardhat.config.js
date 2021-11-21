@@ -20,7 +20,7 @@ module.exports = {
       chainId: 97,
       accounts:
         process.env.DEPLOYER001_PRIVATE_KEY !== undefined
-          ? { mnemonic: process.env.DEPLOYER001_PRIVATE_KEY }
+          ? [process.env.DEPLOYER001_PRIVATE_KEY]
           : [],
     },
     mainnet: {
