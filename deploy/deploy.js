@@ -56,34 +56,34 @@ async function main() {
     }
   }
 
-  console.log("Deploying DividenTracker contract...");
-  const ARCDividendTracker = await ethers.getContractFactory("ARCDividendTracker", {
-    libraries: {
-      IterableMapping: iterableMapping.address,
-    },
-  });
-  const dividenTracker = await ARCDividendTracker.deploy();
-  await dividenTracker.deployed();
+  // console.log("Deploying DividenTracker contract...");
+  // const ARCDividendTracker = await ethers.getContractFactory("ARCDividendTracker", {
+  //   libraries: {
+  //     IterableMapping: iterableMapping.address,
+  //   },
+  // });
+  // const dividenTracker = await ARCDividendTracker.deploy();
+  // await dividenTracker.deployed();
 
-  console.log("Deployed at:", dividenTracker.address);
+  // console.log("Deployed at:", dividenTracker.address);
 
-  try {
-    console.log('Verifying DividendTracker', dividenTracker.address);
+  // try {
+  //   console.log('Verifying DividendTracker', dividenTracker.address);
 
-    await run("verify:verify", {
-      address: dividenTracker.address,
-    });
-  } catch (error) {
-    if (error instanceof NomicLabsHardhatPluginError) {
-      console.log("Contract source code already verified");
-    } else {
-      console.error(error);
-    }
-  }
+  //   await run("verify:verify", {
+  //     address: dividenTracker.address,
+  //   });
+  // } catch (error) {
+  //   if (error instanceof NomicLabsHardhatPluginError) {
+  //     console.log("Contract source code already verified");
+  //   } else {
+  //     console.error(error);
+  //   }
+  // }
 
-  console.log("Set new DividenTracker");
-  await dividenTracker.transferOwnership(arcade.address);
-  await arcade.updateDividendTracker(dividenTracker.address);
+  // console.log("Set new DividenTracker");
+  // await dividenTracker.transferOwnership(arcade.address);
+  // await arcade.updateDividendTracker(dividenTracker.address);
 }
 
 

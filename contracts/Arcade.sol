@@ -39,7 +39,7 @@ contract Arcade is ERC20, Ownable {
      * BUSD on Mainnet: 0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56
      */
     address public immutable BUSD;
-    address public immutable DEAD = 0x000000000000000000000000000000000000dEaD;
+    address public DEAD = 0x000000000000000000000000000000000000dEaD;
 
     address public buyBackAddress;
     address public marketingAddress;
@@ -50,7 +50,7 @@ contract Arcade is ERC20, Ownable {
     mapping (address => uint256[]) private _transactTime; // last transaction time(block.timestamp)
     mapping (address => bool) private _isExcludedFromAntiBot;
     mapping(address => bool) public _isBlackListed;
-    bool public _antiBotEnabled = true; // true; // test code
+    bool public _antiBotEnabled = true;
     uint256 public _botLimitTimestamp;  // timestamp when set variable
     uint256 public _botTransLimitTime = 600; // transaction limit time in second
     uint256 public _botTransLimitCount = 4; // transaction limit count within _botExpiration(second)
@@ -59,7 +59,7 @@ contract Arcade is ERC20, Ownable {
     uint256 public gasForProcessing = 150000;
 
     // liquidate tokens for ETH when the contract reaches 100k tokens by default
-    uint256 public liquidateTokensAtAmount = 1; // 100000 * (10**18); // test code
+    uint256 public liquidateTokensAtAmount = 100000 * (10**18);
 
     // whether the token can already be traded
     bool public tradingEnabled = true; // remove true condition
@@ -150,11 +150,12 @@ contract Arcade is ERC20, Ownable {
         // exclude from paying fees or having max transaction amount
         excludeFromFees(liquidityWallet);
         excludeFromFees(address(this));
-        excludeFromFees(buyBackAddress);
+        // excludeFromFees(buyBackAddress);
         excludeFromFees(marketingAddress);
-        excludeFromFees(charityAddress);
+        // excludeFromFees(charityAddress);
         excludeFromFees(devAddress);
-        excludeFromFees(farmingAddress);
+        // excludeFromFees(farmingAddress);
+        excludeFromFees(DEAD);
 
         // enable owner wallet to send tokens before presales are over.
         canTransferBeforeTradingIsEnabled[owner()] = true;
@@ -432,7 +433,6 @@ contract Arcade is ERC20, Ownable {
             takeFee = false;
         }
         
-        uint256 burnTokens = amount.mul(_burnFee).div(10000);
 
         if (takeFee) {
             uint256 fees = amount.mul(_totalFees).div(10000);
@@ -440,13 +440,13 @@ contract Arcade is ERC20, Ownable {
 
             uint256 farmingFees = amount.mul(_farmingFee).div(10000);
             super._transfer(from, farmingAddress, farmingFees);
-            amount = amount.sub(fees).sub(farmingFees);
-        }
 
-        if (from != uniswapV2Pair && to != uniswapV2Pair && burnTokens > 0) {
+            uint256 burnTokens = amount.mul(_burnFee).div(10000);
+            amount = amount.sub(fees).sub(farmingFees).sub(burnTokens);
             super._burn(from, burnTokens);
         }
-        super._transfer(from, to, amount.sub(burnTokens));
+        
+        super._transfer(from, to, amount);
 
         try dividendTracker.setBalance(payable(from), balanceOf(from)) {} catch {}
         try dividendTracker.setBalance(payable(to), balanceOf(to)) {} catch {}
@@ -580,9 +580,10 @@ contract Arcade is ERC20, Ownable {
         swapAndSendToFee(feeTokens);
 
         dividends = dividends.sub(feeTokens);
+        if (dividends < 0) return;
         bool success = IERC20(BUSD).transfer(address(dividendTracker), dividends);
 
-        if (success && dividends > 0) {
+        if (success) {
             try dividendTracker.distributeBUSDDividends(dividends) {
                 emit SentDividends(feeTokens, dividends);
             } catch {}

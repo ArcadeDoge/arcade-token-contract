@@ -19,7 +19,7 @@ contract DividendPayingToken is ERC20, DividendPayingTokenInterface, DividendPay
     using SafeMath for uint256;
     using SafeMathUint for uint256;
     using SafeMathInt for int256;
-    
+
     address public immutable BUSD = address(0x78867BbEeF44f2326bF8DDd1941a4439382EF2A7); //BUSD
 
     // With `magnitude`, we can properly distribute dividends even if the amount of received ether is small.
@@ -145,9 +145,9 @@ contract DividendPayingToken is ERC20, DividendPayingTokenInterface, DividendPay
     function _transfer(address from, address to, uint256 value) internal virtual override {
         require(false, "This function should be overrided");
 
-        // int256 _magCorrection = magnifiedDividendPerShare.mul(value).toInt256Safe();
-        // magnifiedDividendCorrections[from] = magnifiedDividendCorrections[from].add(_magCorrection);
-        // magnifiedDividendCorrections[to] = magnifiedDividendCorrections[to].sub(_magCorrection);
+        int256 _magCorrection = magnifiedDividendPerShare.mul(value).toInt256Safe();
+        magnifiedDividendCorrections[from] = magnifiedDividendCorrections[from].add(_magCorrection);
+        magnifiedDividendCorrections[to] = magnifiedDividendCorrections[to].sub(_magCorrection);
     }
 
     /// @dev Internal function that mints tokens to an account.
