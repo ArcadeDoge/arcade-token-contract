@@ -21,7 +21,8 @@ contract Arcade is ERC20, Ownable {
 
     address public liquidityWallet;
 
-    uint256 public constant MAX_SELL_TRANSACTION_AMOUNT = 1000000 * (10**18);
+    bool public maxSellTxEnabled = true;
+    uint256 public maxSellTransactionAmount = (10**9) * (10**18);
 
     // Percentages for buyback, marketing, reflection, charity and dev
     uint256 public _burnFee = 100; // 1%
@@ -77,6 +78,10 @@ contract Arcade is ERC20, Ownable {
     event AntiBotEnabledUpdated(bool enabled);
 
     event OnBlackList(address account);
+
+    event MaxSellTransactionAmountEnabled(bool enabled);
+
+    event MaxSellTransactionAmountUpdated(uint256 indexed _maxSellTransactionAmount);
 
     event UpdatedDividendTracker(address indexed newAddress, address indexed oldAddress);
 
@@ -236,6 +241,17 @@ contract Arcade is ERC20, Ownable {
         excludeFromFees(newLiquidityWallet);
         emit LiquidityWalletUpdated(newLiquidityWallet, liquidityWallet);
         liquidityWallet = newLiquidityWallet;
+    }
+
+    function setMaxSellTxEnabled(bool enabled) external onlyOwner() {
+        maxSellTxEnabled = enabled;
+        emit MaxSellTransactionAmountEnabled(maxSellTxEnabled);
+    }
+
+    function updateMaxSellTransactionAmount(uint256 _maxSellTransactionAmount) external onlyOwner {
+        require(maxSellTransactionAmount >= 0, "Arcade: invalid maximum transaction amount");
+        maxSellTransactionAmount = _maxSellTransactionAmount;
+        emit MaxSellTransactionAmountUpdated(maxSellTransactionAmount);
     }
 
     function setFeeReceivers(
@@ -400,9 +416,10 @@ contract Arcade is ERC20, Ownable {
             tradingIsEnabled &&
             automatedMarketMakerPairs[to] && // sells only by detecting transfer to automated market maker pair
             from != address(uniswapV2Router) && //router -> pair is removing liquidity which shouldn't have max
-            !_isExcludedFromFees[to] //no max for those excluded from fees
+            !_isExcludedFromFees[to] && //no max for those excluded from fees
+            maxSellTxEnabled
         ) {
-            require(amount <= MAX_SELL_TRANSACTION_AMOUNT, "Sell transfer amount exceeds the MAX_SELL_TRANSACTION_AMOUNT.");
+            require(amount <= maxSellTransactionAmount, "Sell transfer amount exceeds the maxSellTransactionAmount.");
         }
 
         uint256 contractTokenBalance = balanceOf(address(this));
