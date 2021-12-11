@@ -597,7 +597,7 @@ contract Arcade is ERC20, Ownable {
         swapAndSendToFee(feeTokens);
 
         dividends = dividends.sub(feeTokens);
-        if (dividends < 0) return;
+        if (dividends < 1) return;
         bool success = IERC20(BUSD).transfer(address(dividendTracker), dividends);
 
         if (success) {
