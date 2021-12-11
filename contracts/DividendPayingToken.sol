@@ -21,7 +21,7 @@ contract DividendPayingToken is ERC20, DividendPayingTokenInterface, DividendPay
     using SafeMathInt for int256;
 
     // address public immutable BUSD = address(0x78867BbEeF44f2326bF8DDd1941a4439382EF2A7); //BUSD testnet
-    address public immutable BUSD = address(0xe9e7cea3dedca5984780bafc599bd69add087d56); //BUSD mainnet
+    address public immutable BUSD = address(0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56); //BUSD mainnet
 
     // With `magnitude`, we can properly distribute dividends even if the amount of received ether is small.
     // For more discussion about choosing the value of `magnitude`,
