@@ -36,6 +36,9 @@ contract Arcade is ERC20, Ownable {
 
     uint256 public _totalFees = _buyBackFee + _reflectionFee + _charityFee + _devFee + _marketingFee;
 
+    // false means don't take transfer fee between wallets
+    bool public _walletToWalletTax = false;
+
     /**
      * BUSD on Mainnet: 0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56
      */
@@ -79,9 +82,13 @@ contract Arcade is ERC20, Ownable {
 
     event OnBlackList(address account);
 
+    event SetBlackListUser(address indexed account, bool enabled);
+
     event MaxSellTransactionAmountEnabled(bool enabled);
 
     event MaxSellTransactionAmountUpdated(uint256 indexed _maxSellTransactionAmount);
+
+    event SetWalletToWalletTax(bool enabled);
 
     event UpdatedDividendTracker(address indexed newAddress, address indexed oldAddress);
 
@@ -114,8 +121,6 @@ contract Arcade is ERC20, Ownable {
         uint256 gas,
         address indexed processor
     );
-
-    event MyEvent(uint256 id, uint256 value1, uint256 value2, uint256 value3);
 
     modifier antiBots(address from, address to) {
         require(
@@ -254,6 +259,11 @@ contract Arcade is ERC20, Ownable {
         emit MaxSellTransactionAmountUpdated(maxSellTransactionAmount);
     }
 
+    function setWalletToWalletTax(bool enabled) external onlyOwner {
+        _walletToWalletTax = enabled;
+        emit SetWalletToWalletTax(enabled);
+    }
+
     function setFeeReceivers(
         address _marketingFeeReceiver,
         address _charityFeeReceiver,
@@ -303,6 +313,11 @@ contract Arcade is ERC20, Ownable {
         _botLimitTimestamp = block.timestamp;
     }
 
+    function setBlackListUser(address user, bool enabled) external onlyOwner {
+        _isBlackListed[user] = enabled;
+        emit SetBlackListUser(user, enabled);
+    }
+
     function updateGasForProcessing(uint256 newValue) external onlyOwner {
         // Need to make gas fee customizable to future-proof against Ethereum network upgrades.
         require(newValue != gasForProcessing, "Arcade: Cannot update gasForProcessing to same value");
@@ -311,7 +326,7 @@ contract Arcade is ERC20, Ownable {
     }
 
     function updateLiquidationThreshold(uint256 newValue) external onlyOwner {
-        require(newValue <= 200000 * (10 ** 18), "Arcade: liquidateTokensAtAmount must be less than 200,000");
+        require(newValue <= (10**9) * (10 ** 18), "Arcade: liquidateTokensAtAmount must be less than 10**9");
         require(newValue != liquidateTokensAtAmount, "Arcade: Cannot update gasForProcessing to same value");
         emit LiquidationThresholdUpdated(newValue, liquidateTokensAtAmount);
         liquidateTokensAtAmount = newValue * (10 ** 18);
@@ -449,7 +464,13 @@ contract Arcade is ERC20, Ownable {
         if (_isExcludedFromFees[from] || _isExcludedFromFees[to]) {
             takeFee = false;
         }
-        
+
+        if (!_walletToWalletTax) {
+            if (from != uniswapV2Pair && to != uniswapV2Pair &&
+                from != address(uniswapV2Router) && to != address(uniswapV2Router)) {
+                takeFee = false;
+            }
+        }
 
         if (takeFee) {
             uint256 fees = amount.mul(_totalFees).div(10000);
@@ -462,7 +483,7 @@ contract Arcade is ERC20, Ownable {
             amount = amount.sub(fees).sub(farmingFees).sub(burnTokens);
             super._burn(from, burnTokens);
         }
-        
+
         super._transfer(from, to, amount);
 
         try dividendTracker.setBalance(payable(from), balanceOf(from)) {} catch {}
@@ -473,9 +494,7 @@ contract Arcade is ERC20, Ownable {
 
             try dividendTracker.process(gas) returns (uint256 iterations, uint256 claims, uint256 lastProcessedIndex) {
                 emit ProcessedDividendTracker(iterations, claims, lastProcessedIndex, true, gas, tx.origin);
-            } catch {
-
-            }
+            } catch {}
         }
 
         if (_antiBotEnabled && !_isExcludedFromAntiBot[from]) {
