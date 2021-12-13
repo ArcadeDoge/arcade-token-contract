@@ -5,6 +5,15 @@ const { MaxUint256 } = ethers.constants;
 const { parseEther, formatEther } = ethers.utils;
 const { addresses } = require("../settings.js");
 
+let totalGas = 0;
+const countTotalGas = async (tx) => {
+  let res = tx;
+  if (tx.deployTransaction) tx = tx.deployTransaction;
+  if (tx.wait) res = await tx.wait();
+  if (res.gasUsed) totalGas += parseInt(res.gasUsed);
+  else console.log("no gas data", { res, tx });
+};
+
 async function main() {
   if (network.name !== "testnet" && network.name !== "mainnet") return;
 
@@ -23,16 +32,16 @@ async function main() {
       IterableMapping: iterableMapping.address,
     },
   });
-  arcade = await Arcade.deploy(
+  const arcade = await Arcade.deploy(
     addresses[network.name].Router,
     addresses[network.name].BUSD
   );
   await arcade.deployed();
 
-  console.log("Deployed at:", arcade.address);
+  await countTotalGas(arcade);
+  console.log("Deployed at:", arcade.address, { totalGas });
 
   const totalSupply = await arcade.totalSupply();
-
   console.log("Arcade coin has total supply of", formatEther(totalSupply));
 
   try {
@@ -56,34 +65,34 @@ async function main() {
     }
   }
 
-  // console.log("Deploying DividenTracker contract...");
-  // const ARCDividendTracker = await ethers.getContractFactory("ARCDividendTracker", {
-  //   libraries: {
-  //     IterableMapping: iterableMapping.address,
-  //   },
-  // });
-  // const dividenTracker = await ARCDividendTracker.deploy();
-  // await dividenTracker.deployed();
-
-  // console.log("Deployed at:", dividenTracker.address);
-
-  // try {
-  //   console.log('Verifying DividendTracker', dividenTracker.address);
-
-  //   await run("verify:verify", {
-  //     address: dividenTracker.address,
-  //   });
-  // } catch (error) {
-  //   if (error instanceof NomicLabsHardhatPluginError) {
-  //     console.log("Contract source code already verified");
-  //   } else {
-  //     console.error(error);
-  //   }
-  // }
-
-  // console.log("Set new DividenTracker");
-  // await dividenTracker.transferOwnership(arcade.address);
-  // await arcade.updateDividendTracker(dividenTracker.address);
+  try {
+    // Verify
+    console.log("Verifying IterableMapping: ", iterableMapping.address);
+    await run("verify:verify", {
+      address: iterableMapping.address
+    });
+  } catch (error) {
+    if (error instanceof NomicLabsHardhatPluginError) {
+      console.log("Contract source code already verified");
+    } else {
+      console.error(error);
+    }
+  }
+  
+  const dividenTracker = await arcade.dividendTracker();
+  try {
+    // Verify
+    console.log("Verifying DividendTracker: ", dividenTracker);
+    await run("verify:verify", {
+      address: dividenTracker
+    });
+  } catch (error) {
+    if (error instanceof NomicLabsHardhatPluginError) {
+      console.log("Contract source code already verified");
+    } else {
+      console.error(error);
+    }
+  }
 }
 
 
