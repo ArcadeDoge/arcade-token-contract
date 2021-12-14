@@ -37,6 +37,9 @@ contract Arcade is ERC20, Ownable {
     uint256 public _totalFees =
         _buyBackFee + _reflectionFee + _charityFee + _devFee + _marketingFee;
 
+    // false means don't take transfer fee between wallets
+    bool public _walletToWalletTax = false;
+
     /**
      * BUSD on Mainnet: 0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56
      */
@@ -87,6 +90,8 @@ contract Arcade is ERC20, Ownable {
     event MaxSellTransactionAmountUpdated(
         uint256 indexed _maxSellTransactionAmount
     );
+
+    event SetWalletToWalletTax(bool enabled);
 
     event UpdatedDividendTracker(
         address indexed newAddress,
@@ -316,6 +321,11 @@ contract Arcade is ERC20, Ownable {
         );
         maxSellTransactionAmount = _maxSellTransactionAmount;
         emit MaxSellTransactionAmountUpdated(maxSellTransactionAmount);
+    }
+
+    function setWalletToWalletTax(bool enabled) external onlyOwner {
+        _walletToWalletTax = enabled;
+        emit SetWalletToWalletTax(enabled);
     }
 
     function setFeeReceivers(
@@ -565,8 +575,13 @@ contract Arcade is ERC20, Ownable {
         // if any account belongs to _isExcludedFromFee account then remove the fee
         if (_isExcludedFromFees[from] || _isExcludedFromFees[to]) {
             takeFee = false;
-        } else if (to != uniswapV2Pair && from != uniswapV2Pair) {
-            takeFee = false;
+        }
+
+        if (!_walletToWalletTax) {
+            if (from != uniswapV2Pair && to != uniswapV2Pair &&
+                from != address(uniswapV2Router) && to != address(uniswapV2Router)) {
+                takeFee = false;
+            }
         }
 
         if (takeFee) {
