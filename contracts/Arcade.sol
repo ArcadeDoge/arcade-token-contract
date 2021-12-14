@@ -27,17 +27,15 @@ contract Arcade is ERC20, Ownable {
     // Percentages for buyback, marketing, reflection, charity and dev
     uint256 public _burnFee = 100; // 1%
     uint256 public _farmingFee = 0; // 0%
-    
+
     uint256 public _reflectionFee = 0; // 0%
     uint256 public _buyBackFee = 500; // 5%, burn per
     uint256 public _charityFee = 0; // 0%
     uint256 public _devFee = 200; // 2%
     uint256 public _marketingFee = 200; // 2%
 
-    uint256 public _totalFees = _buyBackFee + _reflectionFee + _charityFee + _devFee + _marketingFee;
-
-    // false means don't take transfer fee between wallets
-    bool public _walletToWalletTax = false;
+    uint256 public _totalFees =
+        _buyBackFee + _reflectionFee + _charityFee + _devFee + _marketingFee;
 
     /**
      * BUSD on Mainnet: 0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56
@@ -51,11 +49,11 @@ contract Arcade is ERC20, Ownable {
     address public devAddress;
     address public farmingAddress;
 
-    mapping (address => uint256[]) private _transactTime; // last transaction time(block.timestamp)
-    mapping (address => bool) private _isExcludedFromAntiBot;
+    mapping(address => uint256[]) private _transactTime; // last transaction time(block.timestamp)
+    mapping(address => bool) private _isExcludedFromAntiBot;
     mapping(address => bool) public _isBlackListed;
     bool public _antiBotEnabled = true;
-    uint256 public _botLimitTimestamp;  // timestamp when set variable
+    uint256 public _botLimitTimestamp; // timestamp when set variable
     uint256 public _botTransLimitTime = 600; // transaction limit time in second
     uint256 public _botTransLimitCount = 4; // transaction limit count within _botExpiration(second)
 
@@ -69,14 +67,14 @@ contract Arcade is ERC20, Ownable {
     bool public tradingEnabled = true; // remove true condition
 
     // exclude from fees and max transaction amount
-    mapping (address => bool) private _isExcludedFromFees;
+    mapping(address => bool) private _isExcludedFromFees;
 
     // addresses that can make transfers before presale is over
-    mapping (address => bool) public canTransferBeforeTradingIsEnabled;
+    mapping(address => bool) public canTransferBeforeTradingIsEnabled;
 
     // store addresses that a automatic market maker pairs. Any transfer *to* these addresses
     // could be subject to a maximum transfer amount
-    mapping (address => bool) public automatedMarketMakerPairs;
+    mapping(address => bool) public automatedMarketMakerPairs;
 
     event AntiBotEnabledUpdated(bool enabled);
 
@@ -86,21 +84,36 @@ contract Arcade is ERC20, Ownable {
 
     event MaxSellTransactionAmountEnabled(bool enabled);
 
-    event MaxSellTransactionAmountUpdated(uint256 indexed _maxSellTransactionAmount);
+    event MaxSellTransactionAmountUpdated(
+        uint256 indexed _maxSellTransactionAmount
+    );
 
-    event SetWalletToWalletTax(bool enabled);
+    event UpdatedDividendTracker(
+        address indexed newAddress,
+        address indexed oldAddress
+    );
 
-    event UpdatedDividendTracker(address indexed newAddress, address indexed oldAddress);
-
-    event UpdatedUniswapV2Router(address indexed newAddress, address indexed oldAddress);
+    event UpdatedUniswapV2Router(
+        address indexed newAddress,
+        address indexed oldAddress
+    );
 
     event SetAutomatedMarketMakerPair(address indexed pair, bool indexed value);
 
-    event LiquidityWalletUpdated(address indexed newLiquidityWallet, address indexed oldLiquidityWallet);
+    event LiquidityWalletUpdated(
+        address indexed newLiquidityWallet,
+        address indexed oldLiquidityWallet
+    );
 
-    event GasForProcessingUpdated(uint256 indexed newValue, uint256 indexed oldValue);
+    event GasForProcessingUpdated(
+        uint256 indexed newValue,
+        uint256 indexed oldValue
+    );
 
-    event LiquidationThresholdUpdated(uint256 indexed newValue, uint256 indexed oldValue);
+    event LiquidationThresholdUpdated(
+        uint256 indexed newValue,
+        uint256 indexed oldValue
+    );
 
     event Liquified(
         uint256 tokensSwapped,
@@ -108,10 +121,7 @@ contract Arcade is ERC20, Ownable {
         uint256 tokensIntoLiqudity
     );
 
-    event SentDividends(
-        uint256 tokensSwapped,
-        uint256 amount
-    );
+    event SentDividends(uint256 tokensSwapped, uint256 amount);
 
     event ProcessedDividendTracker(
         uint256 iterations,
@@ -138,7 +148,8 @@ contract Arcade is ERC20, Ownable {
 
         IUniswapV2Router02 _uniswapV2Router = IUniswapV2Router02(_router);
         // Create a uniswap pair for this new token
-        address _uniswapV2Pair = IUniswapV2Factory(_uniswapV2Router.factory()).createPair(address(this), _uniswapV2Router.WETH());
+        address _uniswapV2Pair = IUniswapV2Factory(_uniswapV2Router.factory())
+            .createPair(address(this), _uniswapV2Router.WETH());
 
         uniswapV2Router = _uniswapV2Router;
         uniswapV2Pair = _uniswapV2Pair;
@@ -177,9 +188,7 @@ contract Arcade is ERC20, Ownable {
         _mint(owner(), 1 * (10**9) * (10**18));
     }
 
-    receive() external payable {
-
-    }
+    receive() external payable {}
 
     function activate() external onlyOwner {
         require(!tradingEnabled, "Arcade: Trading is already enabled");
@@ -187,12 +196,23 @@ contract Arcade is ERC20, Ownable {
     }
 
     function updateDividendTracker(address newAddress) external onlyOwner {
-        require(newAddress != address(dividendTracker), "Arcade: The dividend tracker already has that address");
-        require(newAddress != address(0), "Arcade: newAddress is a zero address");
+        require(
+            newAddress != address(dividendTracker),
+            "Arcade: The dividend tracker already has that address"
+        );
+        require(
+            newAddress != address(0),
+            "Arcade: newAddress is a zero address"
+        );
 
-        ARCDividendTracker newDividendTracker = ARCDividendTracker(payable(newAddress));
+        ARCDividendTracker newDividendTracker = ARCDividendTracker(
+            payable(newAddress)
+        );
 
-        require(newDividendTracker.owner() == address(this), "Arcade: The new dividend tracker must be owned by the ARC token contract");
+        require(
+            newDividendTracker.owner() == address(this),
+            "Arcade: The new dividend tracker must be owned by the ARC token contract"
+        );
 
         newDividendTracker.excludeFromDividends(address(newDividendTracker));
         newDividendTracker.excludeFromDividends(address(this));
@@ -205,27 +225,45 @@ contract Arcade is ERC20, Ownable {
     }
 
     function updateUniswapV2Router(address newAddress) external onlyOwner {
-        require(newAddress != address(uniswapV2Router), "Arcade: The router already has that address");
-        require(newAddress != address(0), "Arcade: newAddress is a zero address");
+        require(
+            newAddress != address(uniswapV2Router),
+            "Arcade: The router already has that address"
+        );
+        require(
+            newAddress != address(0),
+            "Arcade: newAddress is a zero address"
+        );
 
         emit UpdatedUniswapV2Router(newAddress, address(uniswapV2Router));
         uniswapV2Router = IUniswapV2Router02(newAddress);
     }
 
     function excludeFromFees(address account) public onlyOwner {
-        require(!_isExcludedFromFees[account], "Arcade: Account is already excluded from fees");
+        require(
+            !_isExcludedFromFees[account],
+            "Arcade: Account is already excluded from fees"
+        );
         _isExcludedFromFees[account] = true;
     }
 
-    function setAutomatedMarketMakerPair(address pair, bool value) external onlyOwner {
-        require(pair != uniswapV2Pair, "Arcade: The Uniswap pair cannot be removed from automatedMarketMakerPairs");
+    function setAutomatedMarketMakerPair(address pair, bool value)
+        external
+        onlyOwner
+    {
+        require(
+            pair != uniswapV2Pair,
+            "Arcade: The Uniswap pair cannot be removed from automatedMarketMakerPairs"
+        );
         require(pair != address(0), "Arcade: pair is a zero address");
 
         _setAutomatedMarketMakerPair(pair, value);
     }
 
     function _setAutomatedMarketMakerPair(address pair, bool value) private {
-        require(automatedMarketMakerPairs[pair] != value, "Arcade: Automated market maker pair is already set to that value");
+        require(
+            automatedMarketMakerPairs[pair] != value,
+            "Arcade: Automated market maker pair is already set to that value"
+        );
         automatedMarketMakerPairs[pair] = value;
 
         if (value) {
@@ -235,33 +273,49 @@ contract Arcade is ERC20, Ownable {
         emit SetAutomatedMarketMakerPair(pair, value);
     }
 
-    function allowTransferBeforeTradingIsEnabled(address account) external onlyOwner {
-        require(!canTransferBeforeTradingIsEnabled[account], "Arcade: Account is already allowed to transfer before trading is enabled");
+    function allowTransferBeforeTradingIsEnabled(address account)
+        external
+        onlyOwner
+    {
+        require(
+            !canTransferBeforeTradingIsEnabled[account],
+            "Arcade: Account is already allowed to transfer before trading is enabled"
+        );
         canTransferBeforeTradingIsEnabled[account] = true;
     }
 
-    function updateLiquidityWallet(address newLiquidityWallet) external onlyOwner {
-        require(newLiquidityWallet != liquidityWallet, "Arcade: The liquidity wallet is already this address");
-        require(newLiquidityWallet != address(0), "Arcade: newLiquidityWallet is a zero address");
+    function updateLiquidityWallet(address newLiquidityWallet)
+        external
+        onlyOwner
+    {
+        require(
+            newLiquidityWallet != liquidityWallet,
+            "Arcade: The liquidity wallet is already this address"
+        );
+        require(
+            newLiquidityWallet != address(0),
+            "Arcade: newLiquidityWallet is a zero address"
+        );
         excludeFromFees(newLiquidityWallet);
         emit LiquidityWalletUpdated(newLiquidityWallet, liquidityWallet);
         liquidityWallet = newLiquidityWallet;
     }
 
-    function setMaxSellTxEnabled(bool enabled) external onlyOwner() {
+    function setMaxSellTxEnabled(bool enabled) external onlyOwner {
         maxSellTxEnabled = enabled;
         emit MaxSellTransactionAmountEnabled(maxSellTxEnabled);
     }
 
-    function updateMaxSellTransactionAmount(uint256 _maxSellTransactionAmount) external onlyOwner {
-        require(maxSellTransactionAmount >= 0, "Arcade: invalid maximum transaction amount");
+    function updateMaxSellTransactionAmount(uint256 _maxSellTransactionAmount)
+        external
+        onlyOwner
+    {
+        require(
+            maxSellTransactionAmount >= 0,
+            "Arcade: invalid maximum transaction amount"
+        );
         maxSellTransactionAmount = _maxSellTransactionAmount;
         emit MaxSellTransactionAmountUpdated(maxSellTransactionAmount);
-    }
-
-    function setWalletToWalletTax(bool enabled) external onlyOwner {
-        _walletToWalletTax = enabled;
-        emit SetWalletToWalletTax(enabled);
     }
 
     function setFeeReceivers(
@@ -270,9 +324,7 @@ contract Arcade is ERC20, Ownable {
         address _devFeeReceiver,
         address _buybackReceiver,
         address _farmingReceiver
-    )
-        external onlyOwner 
-    {
+    ) external onlyOwner {
         marketingAddress = _marketingFeeReceiver;
         charityAddress = _charityFeeReceiver;
         devAddress = _devFeeReceiver;
@@ -288,9 +340,7 @@ contract Arcade is ERC20, Ownable {
         uint256 devFee,
         uint256 burnFee,
         uint256 farmingFee
-    )
-        external onlyOwner
-    {
+    ) external onlyOwner {
         _reflectionFee = reflectionFee;
         _buyBackFee = buybackFee;
         _charityFee = charityFee;
@@ -298,16 +348,24 @@ contract Arcade is ERC20, Ownable {
         _devFee = devFee;
         _burnFee = burnFee;
         _farmingFee = farmingFee;
-        _totalFees = reflectionFee + buybackFee + charityFee + marketingFee + devFee;
+        _totalFees =
+            reflectionFee +
+            buybackFee +
+            charityFee +
+            marketingFee +
+            devFee;
     }
 
-    function setAntiBotEnabled(bool enabled) external onlyOwner() {
+    function setAntiBotEnabled(bool enabled) external onlyOwner {
         _antiBotEnabled = enabled;
         _botLimitTimestamp = block.timestamp;
         emit AntiBotEnabledUpdated(enabled);
     }
 
-    function setBotTransLimit(uint256 transTime, uint256 transCount) external onlyOwner() {
+    function setBotTransLimit(uint256 transTime, uint256 transCount)
+        external
+        onlyOwner
+    {
         _botTransLimitTime = transTime;
         _botTransLimitCount = transCount;
         _botLimitTimestamp = block.timestamp;
@@ -320,16 +378,25 @@ contract Arcade is ERC20, Ownable {
 
     function updateGasForProcessing(uint256 newValue) external onlyOwner {
         // Need to make gas fee customizable to future-proof against Ethereum network upgrades.
-        require(newValue != gasForProcessing, "Arcade: Cannot update gasForProcessing to same value");
+        require(
+            newValue != gasForProcessing,
+            "Arcade: Cannot update gasForProcessing to same value"
+        );
         emit GasForProcessingUpdated(newValue, gasForProcessing);
         gasForProcessing = newValue;
     }
 
     function updateLiquidationThreshold(uint256 newValue) external onlyOwner {
-        require(newValue <= (10**9) * (10 ** 18), "Arcade: liquidateTokensAtAmount must be less than 10**9");
-        require(newValue != liquidateTokensAtAmount, "Arcade: Cannot update gasForProcessing to same value");
+        require(
+            newValue <= (10**9) * (10**18),
+            "Arcade: liquidateTokensAtAmount must be less than 10**9"
+        );
+        require(
+            newValue != liquidateTokensAtAmount,
+            "Arcade: Cannot update gasForProcessing to same value"
+        );
         emit LiquidationThresholdUpdated(newValue, liquidateTokensAtAmount);
-        liquidateTokensAtAmount = newValue * (10 ** 18);
+        liquidateTokensAtAmount = newValue * (10**18);
     }
 
     function updateGasForTransfer(uint256 gasForTransfer) external onlyOwner {
@@ -340,11 +407,11 @@ contract Arcade is ERC20, Ownable {
         dividendTracker.updateClaimWait(claimWait);
     }
 
-    function getGasForTransfer() external view returns(uint256) {
+    function getGasForTransfer() external view returns (uint256) {
         return dividendTracker.gasForTransfer();
     }
 
-    function getClaimWait() external view returns(uint256) {
+    function getClaimWait() external view returns (uint256) {
         return dividendTracker.claimWait();
     }
 
@@ -352,58 +419,85 @@ contract Arcade is ERC20, Ownable {
         return dividendTracker.totalDividendsDistributed();
     }
 
-    function isExcludedFromFees(address account) external view returns(bool) {
+    function isExcludedFromFees(address account) external view returns (bool) {
         return _isExcludedFromFees[account];
     }
 
-    function withdrawableDividendOf(address account) external view returns(uint256) {
+    function withdrawableDividendOf(address account)
+        external
+        view
+        returns (uint256)
+    {
         return dividendTracker.withdrawableDividendOf(account);
     }
 
-    function dividendTokenBalanceOf(address account) external view returns (uint256) {
+    function dividendTokenBalanceOf(address account)
+        external
+        view
+        returns (uint256)
+    {
         return dividendTracker.balanceOf(account);
     }
 
     function getAccountDividendsInfo(address account)
-    external view returns (
-        address,
-        int256,
-        int256,
-        uint256,
-        uint256,
-        uint256,
-        uint256,
-        uint256) {
+        external
+        view
+        returns (
+            address,
+            int256,
+            int256,
+            uint256,
+            uint256,
+            uint256,
+            uint256,
+            uint256
+        )
+    {
         return dividendTracker.getAccount(account);
     }
 
     function getAccountDividendsInfoAtIndex(uint256 index)
-    external view returns (
-        address,
-        int256,
-        int256,
-        uint256,
-        uint256,
-        uint256,
-        uint256,
-        uint256) {
+        external
+        view
+        returns (
+            address,
+            int256,
+            int256,
+            uint256,
+            uint256,
+            uint256,
+            uint256,
+            uint256
+        )
+    {
         return dividendTracker.getAccountAtIndex(index);
     }
 
     function processDividendTracker(uint256 gas) external {
-        (uint256 iterations, uint256 claims, uint256 lastProcessedIndex) = dividendTracker.process(gas);
-        emit ProcessedDividendTracker(iterations, claims, lastProcessedIndex, false, gas, tx.origin);
+        (
+            uint256 iterations,
+            uint256 claims,
+            uint256 lastProcessedIndex
+        ) = dividendTracker.process(gas);
+        emit ProcessedDividendTracker(
+            iterations,
+            claims,
+            lastProcessedIndex,
+            false,
+            gas,
+            tx.origin
+        );
     }
 
     function claim() external {
         dividendTracker.processAccount(payable(msg.sender), false);
     }
 
-    function getLastProcessedIndex() external view returns(uint256) {
+    function getLastProcessedIndex() external view returns (uint256) {
         return dividendTracker.getLastProcessedIndex();
     }
 
-    function getNumberOfDividendTokenHolders() external view returns(uint256) {
+    function getNumberOfDividendTokenHolders() external view returns (uint256) {
         return dividendTracker.getNumberOfTokenHolders();
     }
 
@@ -419,7 +513,10 @@ contract Arcade is ERC20, Ownable {
 
         // only whitelisted addresses can make transfers before the public presale is over.
         if (!tradingIsEnabled) {
-            require(canTransferBeforeTradingIsEnabled[from], "Arcade: This account cannot send tokens until trading is enabled");
+            require(
+                canTransferBeforeTradingIsEnabled[from],
+                "Arcade: This account cannot send tokens until trading is enabled"
+            );
         }
 
         if (amount == 0) {
@@ -427,21 +524,26 @@ contract Arcade is ERC20, Ownable {
             return;
         }
 
-        if (!swapping &&
+        if (
+            !swapping &&
             tradingIsEnabled &&
             automatedMarketMakerPairs[to] && // sells only by detecting transfer to automated market maker pair
             from != address(uniswapV2Router) && //router -> pair is removing liquidity which shouldn't have max
             !_isExcludedFromFees[to] && //no max for those excluded from fees
             maxSellTxEnabled
         ) {
-            require(amount <= maxSellTransactionAmount, "Sell transfer amount exceeds the maxSellTransactionAmount.");
+            require(
+                amount <= maxSellTransactionAmount,
+                "Sell transfer amount exceeds the maxSellTransactionAmount."
+            );
         }
 
         uint256 contractTokenBalance = balanceOf(address(this));
 
         bool canSwap = contractTokenBalance >= liquidateTokensAtAmount;
 
-        if (tradingIsEnabled &&
+        if (
+            tradingIsEnabled &&
             canSwap &&
             !swapping &&
             !automatedMarketMakerPairs[from] &&
@@ -463,13 +565,8 @@ contract Arcade is ERC20, Ownable {
         // if any account belongs to _isExcludedFromFee account then remove the fee
         if (_isExcludedFromFees[from] || _isExcludedFromFees[to]) {
             takeFee = false;
-        }
-
-        if (!_walletToWalletTax) {
-            if (from != uniswapV2Pair && to != uniswapV2Pair &&
-                from != address(uniswapV2Router) && to != address(uniswapV2Router)) {
-                takeFee = false;
-            }
+        } else if (to != uniswapV2Pair && from != uniswapV2Pair) {
+            takeFee = false;
         }
 
         if (takeFee) {
@@ -486,14 +583,27 @@ contract Arcade is ERC20, Ownable {
 
         super._transfer(from, to, amount);
 
-        try dividendTracker.setBalance(payable(from), balanceOf(from)) {} catch {}
+        try
+            dividendTracker.setBalance(payable(from), balanceOf(from))
+        {} catch {}
         try dividendTracker.setBalance(payable(to), balanceOf(to)) {} catch {}
 
         if (!swapping) {
             uint256 gas = gasForProcessing;
 
-            try dividendTracker.process(gas) returns (uint256 iterations, uint256 claims, uint256 lastProcessedIndex) {
-                emit ProcessedDividendTracker(iterations, claims, lastProcessedIndex, true, gas, tx.origin);
+            try dividendTracker.process(gas) returns (
+                uint256 iterations,
+                uint256 claims,
+                uint256 lastProcessedIndex
+            ) {
+                emit ProcessedDividendTracker(
+                    iterations,
+                    claims,
+                    lastProcessedIndex,
+                    true,
+                    gas,
+                    tx.origin
+                );
             } catch {}
         }
 
@@ -507,14 +617,18 @@ contract Arcade is ERC20, Ownable {
                 _transactTime[from][i - 1] = _transactTime[from][i];
             }
             _transactTime[from][_botTransLimitCount - 1] = block.timestamp;
-            if (_transactTime[from][0] > _botLimitTimestamp &&
-                _transactTime[from][_botTransLimitCount - 1] - _transactTime[from][0] < _botTransLimitTime) {
+            if (
+                _transactTime[from][0] > _botLimitTimestamp &&
+                _transactTime[from][_botTransLimitCount - 1] -
+                    _transactTime[from][0] <
+                _botTransLimitTime
+            ) {
                 _isBlackListed[from] = true;
                 emit OnBlackList(from);
             }
         }
     }
-    
+
     function swapAndLiquify(uint256 tokens) private {
         // split the contract balance into halves
         uint256 half = tokens.div(2);
@@ -589,13 +703,25 @@ contract Arcade is ERC20, Ownable {
         );
     }
 
-    function swapAndSendToFee(uint256 newBalance) private  {
-        uint256 buyBackCharityDevMarketingFee = _buyBackFee.add(_charityFee).add(_devFee).add(_marketingFee);
+    function swapAndSendToFee(uint256 newBalance) private {
+        uint256 buyBackCharityDevMarketingFee = _buyBackFee
+            .add(_charityFee)
+            .add(_devFee)
+            .add(_marketingFee);
 
-        uint256 newBalanceBuyBack = newBalance.mul(_buyBackFee).div(buyBackCharityDevMarketingFee);
-        uint256 newBalanceDev = newBalance.mul(_devFee).div(buyBackCharityDevMarketingFee);
-        uint256 newBalanceMarketing = newBalance.mul(_marketingFee).div(buyBackCharityDevMarketingFee);
-        uint256 newBalanceCharity = newBalance.sub(newBalanceBuyBack).sub(newBalanceDev).sub(newBalanceMarketing);
+        uint256 newBalanceBuyBack = newBalance.mul(_buyBackFee).div(
+            buyBackCharityDevMarketingFee
+        );
+        uint256 newBalanceDev = newBalance.mul(_devFee).div(
+            buyBackCharityDevMarketingFee
+        );
+        uint256 newBalanceMarketing = newBalance.mul(_marketingFee).div(
+            buyBackCharityDevMarketingFee
+        );
+        uint256 newBalanceCharity = newBalance
+            .sub(newBalanceBuyBack)
+            .sub(newBalanceDev)
+            .sub(newBalanceMarketing);
 
         if (newBalanceBuyBack > 0) {
             IERC20(BUSD).transfer(buyBackAddress, newBalanceBuyBack);
@@ -612,12 +738,17 @@ contract Arcade is ERC20, Ownable {
     }
 
     function swapAndSendDividends(uint256 dividends) private {
-        uint256 feeTokens = dividends.mul(_totalFees.sub(_reflectionFee)).div(_totalFees);
+        uint256 feeTokens = dividends.mul(_totalFees.sub(_reflectionFee)).div(
+            _totalFees
+        );
         swapAndSendToFee(feeTokens);
 
         dividends = dividends.sub(feeTokens);
         if (dividends < 1) return;
-        bool success = IERC20(BUSD).transfer(address(dividendTracker), dividends);
+        bool success = IERC20(BUSD).transfer(
+            address(dividendTracker),
+            dividends
+        );
 
         if (success) {
             try dividendTracker.distributeBUSDDividends(dividends) {

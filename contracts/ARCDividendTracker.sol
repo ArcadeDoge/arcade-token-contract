@@ -16,33 +16,52 @@ contract ARCDividendTracker is DividendPayingToken, Ownable {
     IterableMapping.Map private tokenHoldersMap;
     uint256 public lastProcessedIndex;
 
-    mapping (address => bool) public excludedFromDividends;
+    mapping(address => bool) public excludedFromDividends;
 
-    mapping (address => uint256) public lastClaimTimes;
+    mapping(address => uint256) public lastClaimTimes;
 
     uint256 public claimWait;
     uint256 public constant MIN_TOKEN_BALANCE_FOR_DIVIDENDS = 10000 * (10**18); // Must hold 10000+ tokens.
 
     event ExcludedFromDividends(address indexed account);
-    event GasForTransferUpdated(uint256 indexed newValue, uint256 indexed oldValue);
+    event GasForTransferUpdated(
+        uint256 indexed newValue,
+        uint256 indexed oldValue
+    );
     event ClaimWaitUpdated(uint256 indexed newValue, uint256 indexed oldValue);
 
-    event Claim(address indexed account, uint256 amount, bool indexed automatic);
+    event Claim(
+        address indexed account,
+        uint256 amount,
+        bool indexed automatic
+    );
 
-    constructor() DividendPayingToken("ARC_Dividend_Tracker", "ARC_Dividend_Tracker") {
+    constructor()
+        DividendPayingToken("ARC_Dividend_Tracker", "ARC_Dividend_Tracker")
+    {
         claimWait = 3600;
     }
 
-    function _transfer(address, address, uint256) internal pure override {
+    function _transfer(
+        address,
+        address,
+        uint256
+    ) internal pure override {
         require(false, "ARC_Dividend_Tracker: No transfers allowed");
     }
 
     function withdrawDividend() external pure override {
-        require(false, "ARC_Dividend_Tracker: withdrawDividend disabled. Use the 'claim' function on the main ARC contract.");
+        require(
+            false,
+            "ARC_Dividend_Tracker: withdrawDividend disabled. Use the 'claim' function on the main ARC contract."
+        );
     }
 
     function excludeFromDividends(address account) external onlyOwner {
-        require(!excludedFromDividends[account], "This account is already excluded from dividends");
+        require(
+            !excludedFromDividends[account],
+            "This account is already excluded from dividends"
+        );
         excludedFromDividends[account] = true;
 
         _setBalance(account, 0);
@@ -51,37 +70,53 @@ contract ARCDividendTracker is DividendPayingToken, Ownable {
         emit ExcludedFromDividends(account);
     }
 
-    function updateGasForTransfer(uint256 newGasForTransfer) external onlyOwner {
-        require(newGasForTransfer != gasForTransfer, "ARC_Dividend_Tracker: Cannot update gasForTransfer to same value");
+    function updateGasForTransfer(uint256 newGasForTransfer)
+        external
+        onlyOwner
+    {
+        require(
+            newGasForTransfer != gasForTransfer,
+            "ARC_Dividend_Tracker: Cannot update gasForTransfer to same value"
+        );
         emit GasForTransferUpdated(newGasForTransfer, gasForTransfer);
         gasForTransfer = newGasForTransfer;
     }
 
     function updateClaimWait(uint256 newClaimWait) external onlyOwner {
-        require(newClaimWait >= 3600 && newClaimWait <= 86400, "ARC_Dividend_Tracker: claimWait must be updated to between 1 and 24 hours");
-        require(newClaimWait != claimWait, "ARC_Dividend_Tracker: Cannot update claimWait to same value");
+        require(
+            newClaimWait >= 3600 && newClaimWait <= 86400,
+            "ARC_Dividend_Tracker: claimWait must be updated to between 1 and 24 hours"
+        );
+        require(
+            newClaimWait != claimWait,
+            "ARC_Dividend_Tracker: Cannot update claimWait to same value"
+        );
         emit ClaimWaitUpdated(newClaimWait, claimWait);
         claimWait = newClaimWait;
     }
 
-    function getLastProcessedIndex() external view returns(uint256) {
+    function getLastProcessedIndex() external view returns (uint256) {
         return lastProcessedIndex;
     }
 
-    function getNumberOfTokenHolders() external view returns(uint256) {
+    function getNumberOfTokenHolders() external view returns (uint256) {
         return tokenHoldersMap.keys.length;
     }
 
     function getAccount(address _account)
-    public view returns (
-        address account,
-        int256 index,
-        int256 iterationsUntilProcessed,
-        uint256 withdrawableDividends,
-        uint256 totalDividends,
-        uint256 lastClaimTime,
-        uint256 nextClaimTime,
-        uint256 secondsUntilAutoClaimAvailable) {
+        public
+        view
+        returns (
+            address account,
+            int256 index,
+            int256 iterationsUntilProcessed,
+            uint256 withdrawableDividends,
+            uint256 totalDividends,
+            uint256 lastClaimTime,
+            uint256 nextClaimTime,
+            uint256 secondsUntilAutoClaimAvailable
+        )
+    {
         account = _account;
 
         index = tokenHoldersMap.getIndexOfKey(account);
@@ -90,10 +125,17 @@ contract ARCDividendTracker is DividendPayingToken, Ownable {
 
         if (index >= 0) {
             if (uint256(index) > lastProcessedIndex) {
-                iterationsUntilProcessed = index.sub(lastProcessedIndex.toInt256Safe());
+                iterationsUntilProcessed = index.sub(
+                    lastProcessedIndex.toInt256Safe()
+                );
             } else {
-                uint256 processesUntilEndOfArray = tokenHoldersMap.keys.length > lastProcessedIndex ? tokenHoldersMap.keys.length.sub(lastProcessedIndex) : 0;
-                iterationsUntilProcessed = index.add(processesUntilEndOfArray.toInt256Safe());
+                uint256 processesUntilEndOfArray = tokenHoldersMap.keys.length >
+                    lastProcessedIndex
+                    ? tokenHoldersMap.keys.length.sub(lastProcessedIndex)
+                    : 0;
+                iterationsUntilProcessed = index.add(
+                    processesUntilEndOfArray.toInt256Safe()
+                );
             }
         }
 
@@ -102,21 +144,36 @@ contract ARCDividendTracker is DividendPayingToken, Ownable {
 
         lastClaimTime = lastClaimTimes[account];
         nextClaimTime = lastClaimTime > 0 ? lastClaimTime.add(claimWait) : 0;
-        secondsUntilAutoClaimAvailable = nextClaimTime > block.timestamp ? nextClaimTime.sub(block.timestamp) : 0;
+        secondsUntilAutoClaimAvailable = nextClaimTime > block.timestamp
+            ? nextClaimTime.sub(block.timestamp)
+            : 0;
     }
 
     function getAccountAtIndex(uint256 index)
-    external view returns (
-        address,
-        int256,
-        int256,
-        uint256,
-        uint256,
-        uint256,
-        uint256,
-        uint256) {
+        external
+        view
+        returns (
+            address,
+            int256,
+            int256,
+            uint256,
+            uint256,
+            uint256,
+            uint256,
+            uint256
+        )
+    {
         if (index >= tokenHoldersMap.size()) {
-            return (0x0000000000000000000000000000000000000000, -1, -1, 0, 0, 0, 0, 0);
+            return (
+                0x0000000000000000000000000000000000000000,
+                -1,
+                -1,
+                0,
+                0,
+                0,
+                0,
+                0
+            );
         }
 
         address account = tokenHoldersMap.getKeyAtIndex(index);
@@ -124,13 +181,16 @@ contract ARCDividendTracker is DividendPayingToken, Ownable {
     }
 
     function canAutoClaim(uint256 lastClaimTime) private view returns (bool) {
-        if (lastClaimTime > block.timestamp)  {
+        if (lastClaimTime > block.timestamp) {
             return false;
         }
         return block.timestamp.sub(lastClaimTime) >= claimWait;
     }
 
-    function setBalance(address payable account, uint256 newBalance) external onlyOwner {
+    function setBalance(address payable account, uint256 newBalance)
+        external
+        onlyOwner
+    {
         if (excludedFromDividends[account]) {
             return;
         }
@@ -146,7 +206,14 @@ contract ARCDividendTracker is DividendPayingToken, Ownable {
         processAccount(account, true);
     }
 
-    function process(uint256 gas) external returns (uint256, uint256, uint256) {
+    function process(uint256 gas)
+        external
+        returns (
+            uint256,
+            uint256,
+            uint256
+        )
+    {
         uint256 numberOfTokenHolders = tokenHoldersMap.keys.length;
 
         if (numberOfTokenHolders == 0) {
@@ -192,7 +259,11 @@ contract ARCDividendTracker is DividendPayingToken, Ownable {
         return (iterations, claims, lastProcessedIndex);
     }
 
-    function processAccount(address payable account, bool automatic) public onlyOwner returns (bool) {
+    function processAccount(address payable account, bool automatic)
+        public
+        onlyOwner
+        returns (bool)
+    {
         uint256 amount = _withdrawDividendOfUser(account);
 
         if (amount > 0) {
