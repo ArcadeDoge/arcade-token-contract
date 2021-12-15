@@ -36,8 +36,8 @@ contract ARCDividendTracker is DividendPayingToken, Ownable {
         bool indexed automatic
     );
 
-    constructor()
-        DividendPayingToken("ARC_Dividend_Tracker", "ARC_Dividend_Tracker")
+    constructor(address _busd)
+        DividendPayingToken("ARC_Dividend_Tracker", "ARC_Dividend_Tracker", _busd)
     {
         claimWait = 3600;
     }

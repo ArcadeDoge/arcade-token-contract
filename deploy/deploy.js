@@ -84,7 +84,10 @@ async function main() {
     // Verify
     console.log("Verifying DividendTracker: ", dividenTracker);
     await run("verify:verify", {
-      address: dividenTracker
+      address: dividenTracker,
+      constructorArguments: [
+        addresses[network.name].BUSD
+      ]
     });
   } catch (error) {
     if (error instanceof NomicLabsHardhatPluginError) {

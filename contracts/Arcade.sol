@@ -146,7 +146,7 @@ contract Arcade is ERC20, Ownable {
     }
 
     constructor(address _router, address _busd) ERC20("ARCADE", "ARC") {
-        dividendTracker = new ARCDividendTracker();
+        dividendTracker = new ARCDividendTracker(_busd);
         liquidityWallet = owner();
 
         BUSD = _busd;
